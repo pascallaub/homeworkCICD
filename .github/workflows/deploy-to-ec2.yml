@@ -66,6 +66,21 @@ jobs:
           terraform_version: "1.6.0"
           terraform_wrapper: false
 
+      - name: Recreate Backend Infrastructure
+        run: |
+          # Recreate DynamoDB table if it doesn't exist
+          if ! aws dynamodb describe-table --table-name terraform-locks --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            echo "Creating DynamoDB table for state locking..."
+            aws dynamodb create-table \
+              --table-name terraform-locks \
+              --attribute-definitions AttributeName=LockID,AttributeType=S \
+              --key-schema AttributeName=LockID,KeyType=HASH \
+              --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
+              --region ${{ env.AWS_REGION }}
+            aws dynamodb wait table-exists --table-name terraform-locks --region ${{ env.AWS_REGION }}
+            echo "DynamoDB table created successfully"
+          fi
+
       - name: Terraform Init
         working-directory: terraform
         run: |
