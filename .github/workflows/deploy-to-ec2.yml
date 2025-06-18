@@ -60,60 +60,72 @@ jobs:
       - name: Terraform Apply
         run: terraform apply -auto-approve
         
-      - name: Get EC2 IP
-        id: ec2_ip
-        run: echo "ip=$(terraform output -raw ec2_ip)" >> $GITHUB_OUTPUT
+      - name: Get outputs and save SSH key
+        id: terraform_outputs
+        run: |
+          echo "ip=$(terraform output -raw ec2_ip)" >> $GITHUB_OUTPUT
+          terraform output -raw private_key_pem > ../ssh_key.pem
+          
+      - name: Upload SSH key artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ssh-key
+          path: ssh_key.pem
+          retention-days: 1
         
     outputs:
-      ec2_ip: ${{ steps.ec2_ip.outputs.ip }}
+      ec2_ip: ${{ steps.terraform_outputs.outputs.ip }}
 
   app_deploy:
     runs-on: ubuntu-latest
     needs: [ci_build, infra_provision]
     steps:
-      - uses: actions/checkout@v4
-      
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
           name: dist-files
           path: dist/
           
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Download SSH key
+        uses: actions/download-artifact@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          name: ssh-key
           
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_wrapper: false
-          
-      - name: Terraform Init
-        working-directory: terraform
-        run: terraform init
-          
-      - name: Get SSH key from Terraform output
-        working-directory: terraform
+      - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          terraform output -raw private_key_pem > ~/.ssh/id_rsa
+          cp ssh_key.pem ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ needs.infra_provision.outputs.ec2_ip }} >> ~/.ssh/known_hosts
           
+      - name: Wait for instance to be ready
+        run: |
+          echo "Waiting for instance to be ready..."
+          sleep 60
+          
       - name: Deploy to EC2
         run: |
-          scp -o StrictHostKeyChecking=no -r dist/* ec2-user@${{ needs.infra_provision.outputs.ec2_ip }}:/tmp/
-          ssh -o StrictHostKeyChecking=no ec2-user@${{ needs.infra_provision.outputs.ec2_ip }} '
-            sudo yum install -y nginx || true
-            sudo systemctl start nginx || true
-            sudo systemctl enable nginx || true
+          scp -o StrictHostKeyChecking=no -r dist/* ubuntu@${{ needs.infra_provision.outputs.ec2_ip }}:/tmp/
+          ssh -o StrictHostKeyChecking=no ubuntu@${{ needs.infra_provision.outputs.ec2_ip }} '
+            # Update system and install nginx
+            sudo apt-get update -y
+            sudo apt-get install -y nginx
+            sudo systemctl start nginx
+            sudo systemctl enable nginx
+            
+            # Deploy files
             sudo mkdir -p /var/www/html
             sudo rm -rf /var/www/html/*
             sudo cp -r /tmp/* /var/www/html/ 2>/dev/null || true
-            sudo chown -R nginx:nginx /var/www/html
+            sudo chown -R www-data:www-data /var/www/html
             sudo chmod -R 755 /var/www/html
-            sudo systemctl restart nginx || sudo service nginx restart
+            
+            # Restart nginx
+            sudo systemctl restart nginx
+            
+            # Verify deployment
+            echo "=== Nginx status ==="
+            sudo systemctl status nginx --no-pager
+            echo "=== Files in web directory ==="
+            ls -la /var/www/html/
           '
