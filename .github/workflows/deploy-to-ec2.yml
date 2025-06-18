@@ -71,6 +71,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ci_build, infra_provision]
     steps:
+      - uses: actions/checkout@v4
+      
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
@@ -84,43 +86,34 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
           
-      - name: Setup SSH key from Parameter Store
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+          
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init
+          
+      - name: Get SSH key from Terraform output
+        working-directory: terraform
         run: |
           mkdir -p ~/.ssh
-          aws ssm get-parameter --name "/ec2/ssh-key/private" --with-decryption --query 'Parameter.Value' --output text > ~/.ssh/id_rsa
+          terraform output -raw private_key_pem > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ needs.infra_provision.outputs.ec2_ip }} >> ~/.ssh/known_hosts
           
       - name: Deploy to EC2
         run: |
-          # Wait for instance to be ready
-          sleep 30
-          
-          # Copy files
           scp -o StrictHostKeyChecking=no -r dist/* ec2-user@${{ needs.infra_provision.outputs.ec2_ip }}:/tmp/
-          
-          # Deploy and configure
           ssh -o StrictHostKeyChecking=no ec2-user@${{ needs.infra_provision.outputs.ec2_ip }} '
-            # Install nginx if not present
-            if ! command -v nginx &> /dev/null; then
-              sudo yum update -y
-              sudo yum install -y nginx
-            fi
-            
-            # Ensure nginx is running
+            sudo yum install -y nginx || true
             sudo systemctl start nginx || true
             sudo systemctl enable nginx || true
-            
-            # Deploy files
             sudo mkdir -p /var/www/html
             sudo rm -rf /var/www/html/*
             sudo cp -r /tmp/* /var/www/html/ 2>/dev/null || true
             sudo chown -R nginx:nginx /var/www/html
             sudo chmod -R 755 /var/www/html
-            
-            # Restart nginx
             sudo systemctl restart nginx || sudo service nginx restart
-            
-            # Check nginx status
-            sudo systemctl status nginx
           '
