@@ -1,0 +1,122 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.nuxt/
+.vuepress/dist/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+.nyc_output/
+
+# Logs
+*.log
+logs/
+*.tgz
+*.tar.gz
+
+# Operating System
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# IDE and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+.metadata/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Terraform
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate*
+terraform/tfplan
+terraform/*.backup
+terraform/crash.log
+terraform/crash.*.log
+terraform/.terraform.tfstate.lock.info
+
+# SSH Keys and certificates
+ssh_key.pem
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# AWS CLI
+.aws/
+
+# Secrets and credentials
+secrets.json
+credentials.json
+*.secrets
+.credentials
+
+# Cache directories
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+
+# Runtime files
+*.pid
+*.seed
+*.pid.lock
+
+# Test files
+test-results/
+playwright-report/
+test-results.xml
+
+# Package files
+*.tgz
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# Backup files
+*.backup
+*.bak
+*~
