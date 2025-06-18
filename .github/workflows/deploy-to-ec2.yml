@@ -74,11 +74,12 @@ jobs:
               --table-name terraform-locks \
               --attribute-definitions AttributeName=LockID,AttributeType=S \
               --key-schema AttributeName=LockID,KeyType=HASH \
-              --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
-              --region ${{ env.AWS_REGION }}
+              --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \              --region ${{ env.AWS_REGION }}
             aws dynamodb wait table-exists --table-name terraform-locks --region ${{ env.AWS_REGION }}
             echo "DynamoDB table created successfully"
-          fi      - name: Cleanup existing infrastructure
+          fi
+
+      - name: Cleanup existing infrastructure
         run: |
           echo "Cleaning up existing EC2 infrastructure..."
           
