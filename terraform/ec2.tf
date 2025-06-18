@@ -1,5 +1,5 @@
 resource "aws_instance" "web" {
-  ami                    = data.aws_ami.ubuntu.id
+  ami                    = data.aws_ami.amazon_linux.id
   instance_type          = var.instance_type
   key_name               = aws_key_pair.main.key_name
   subnet_id              = aws_subnet.public.id
@@ -8,10 +8,9 @@ resource "aws_instance" "web" {
   user_data = base64encode(templatefile("${path.module}/user_data.sh", {
     project_name = var.project_name
   }))
-
   root_block_device {
     volume_type = "gp3"
-    volume_size = 20
+    volume_size = 30
     encrypted   = true
 
     tags = {
