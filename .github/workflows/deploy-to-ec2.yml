@@ -93,9 +93,34 @@ jobs:
           
       - name: Deploy to EC2
         run: |
-          scp -r dist/* ec2-user@${{ needs.infra_provision.outputs.ec2_ip }}:/tmp/
-          ssh ec2-user@${{ needs.infra_provision.outputs.ec2_ip }} '
+          # Wait for instance to be ready
+          sleep 30
+          
+          # Copy files
+          scp -o StrictHostKeyChecking=no -r dist/* ec2-user@${{ needs.infra_provision.outputs.ec2_ip }}:/tmp/
+          
+          # Deploy and configure
+          ssh -o StrictHostKeyChecking=no ec2-user@${{ needs.infra_provision.outputs.ec2_ip }} '
+            # Install nginx if not present
+            if ! command -v nginx &> /dev/null; then
+              sudo yum update -y
+              sudo yum install -y nginx
+            fi
+            
+            # Ensure nginx is running
+            sudo systemctl start nginx || true
+            sudo systemctl enable nginx || true
+            
+            # Deploy files
+            sudo mkdir -p /var/www/html
             sudo rm -rf /var/www/html/*
-            sudo mv /tmp/* /var/www/html/
-            sudo systemctl restart nginx
+            sudo cp -r /tmp/* /var/www/html/ 2>/dev/null || true
+            sudo chown -R nginx:nginx /var/www/html
+            sudo chmod -R 755 /var/www/html
+            
+            # Restart nginx
+            sudo systemctl restart nginx || sudo service nginx restart
+            
+            # Check nginx status
+            sudo systemctl status nginx
           '

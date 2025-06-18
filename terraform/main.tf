@@ -81,15 +81,66 @@ resource "aws_instance" "web_server" {
     #!/bin/bash
     yum update -y
     yum install -y nginx
+    
+    # Start and enable nginx
     systemctl start nginx
     systemctl enable nginx
     
-    # Create web directory
+    # Create web directory with correct permissions
     mkdir -p /var/www/html
     chown -R nginx:nginx /var/www/html
+    chmod 755 /var/www/html
     
-    # Basic index.html
-    echo "<h1>Web Server Deployed via CI/CD</h1>" > /var/www/html/index.html
+    # Create basic index.html
+    echo "<h1>Web Server Deployed via CI/CD</h1><p>$(date)</p>" > /var/www/html/index.html
+    chown nginx:nginx /var/www/html/index.html
+    
+    # Configure nginx to serve from /var/www/html
+    cat > /etc/nginx/nginx.conf <<'EOL'
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log;
+pid /run/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log  /var/log/nginx/access.log  main;
+
+    sendfile            on;
+    tcp_nopush          on;
+    tcp_nodelay         on;
+    keepalive_timeout   65;
+    types_hash_max_size 2048;
+
+    include             /etc/nginx/mime.types;
+    default_type        application/octet-stream;
+
+    server {
+        listen       80 default_server;
+        listen       [::]:80 default_server;
+        server_name  _;
+        root         /var/www/html;
+        index        index.html index.htm;
+
+        location / {
+            try_files $uri $uri/ =404;
+        }
+    }
+}
+EOL
+    
+    # Restart nginx to apply config
+    systemctl restart nginx
+    
+    # Ensure nginx starts on boot
+    systemctl enable nginx
   EOF
 
   tags = {
