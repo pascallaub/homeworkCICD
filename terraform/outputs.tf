@@ -15,7 +15,7 @@ output "instance_public_dns" {
 
 output "ssh_user" {
   description = "SSH username for the EC2 instance"
-  value       = "ubuntu"
+  value       = "ec2-user"
 }
 
 output "ssh_private_key" {
