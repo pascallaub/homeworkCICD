@@ -13,7 +13,7 @@ jobs:
   ci_build:
     name: Build and Test
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -21,8 +21,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          cache: "npm"
+          node-version: '22'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
@@ -47,7 +47,7 @@ jobs:
     outputs:
       instance_ip: ${{ steps.terraform_output.outputs.instance_ip }}
       ssh_user: ${{ steps.terraform_output.outputs.ssh_user }}
-
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -63,12 +63,11 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.6.0"
+          terraform_version: '1.6.0'
           terraform_wrapper: false
 
       - name: Recreate Backend Infrastructure
         run: |
-          # Recreate DynamoDB table if it doesn't exist
           if ! aws dynamodb describe-table --table-name terraform-locks --region ${{ env.AWS_REGION }} 2>/dev/null; then
             echo "Creating DynamoDB table for state locking..."
             aws dynamodb create-table \
@@ -78,17 +77,17 @@ jobs:
               --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
               --region ${{ env.AWS_REGION }}
             aws dynamodb wait table-exists --table-name terraform-locks --region ${{ env.AWS_REGION }}
-            echo "DynamoDB table created successfully"          fi
+            echo "DynamoDB table created successfully"
+          fi
 
       - name: Cleanup existing key pairs
         run: |
-          # Remove any existing key pairs to avoid conflicts
           echo "Checking for existing key pairs..."
           EXISTING_KEYS=$(aws ec2 describe-key-pairs \
             --region ${{ env.AWS_REGION }} \
             --query "KeyPairs[?starts_with(KeyName, 'react-cicd')].KeyName" \
             --output text 2>/dev/null || echo "")
-
+          
           if [ -n "$EXISTING_KEYS" ]; then
             echo "Found existing key pairs, cleaning up..."
             for key in $EXISTING_KEYS; do
@@ -129,7 +128,7 @@ jobs:
     name: Deploy Application
     needs: infra_provision
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -151,7 +150,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.6.0"
+          terraform_version: '1.6.0'
           terraform_wrapper: false
 
       - name: Get SSH private key
@@ -201,7 +200,7 @@ jobs:
         run: |
           scp -i ssh_key.pem -o StrictHostKeyChecking=no -r dist/* \
             ${{ needs.infra_provision.outputs.ssh_user }}@${{ needs.infra_provision.outputs.instance_ip }}:/tmp/
-
+          
           ssh -i ssh_key.pem -o StrictHostKeyChecking=no \
             ${{ needs.infra_provision.outputs.ssh_user }}@${{ needs.infra_provision.outputs.instance_ip }} \
             'sudo cp -r /tmp/* /var/www/html/ && sudo chown -R nginx:nginx /var/www/html && sudo systemctl reload nginx'
