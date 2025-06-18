@@ -1,6 +1,24 @@
-resource "aws_key_pair" "deployer" {
-  key_name   = "deployer-key"
-  public_key = var.ssh_public_key
+resource "tls_private_key" "ec2_key" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "aws_key_pair" "ec2_key_pair" {
+  key_name   = "ec2-key-${random_string.suffix.result}"
+  public_key = tls_private_key.ec2_key.public_key_openssh
+}
+
+resource "random_string" "suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
+# Store private key in AWS Systems Manager Parameter Store
+resource "aws_ssm_parameter" "private_key" {
+  name  = "/ec2/ssh-key/private"
+  type  = "SecureString"
+  value = tls_private_key.ec2_key.private_key_pem
 }
 
 resource "aws_vpc" "main" {
@@ -62,7 +80,7 @@ resource "aws_instance" "web" {
   instance_type = "t3.micro"
   subnet_id     = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.web.id]
-  key_name      = aws_key_pair.deployer.key_name
+  key_name      = aws_key_pair.ec2_key_pair.key_name
 
   user_data = <<-EOF
               #!/bin/bash
