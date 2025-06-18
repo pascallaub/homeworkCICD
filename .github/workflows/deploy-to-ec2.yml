@@ -13,7 +13,7 @@ jobs:
   ci_build:
     name: Build and Test
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -21,8 +21,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: "22"
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -47,7 +47,7 @@ jobs:
     outputs:
       instance_ip: ${{ steps.terraform_output.outputs.instance_ip }}
       ssh_user: ${{ steps.terraform_output.outputs.ssh_user }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -63,7 +63,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: '1.6.0'
+          terraform_version: "1.6.0"
           terraform_wrapper: false
 
       - name: Recreate Backend Infrastructure
@@ -78,24 +78,43 @@ jobs:
               --region ${{ env.AWS_REGION }}
             aws dynamodb wait table-exists --table-name terraform-locks --region ${{ env.AWS_REGION }}
             echo "DynamoDB table created successfully"
-          fi
-
-      - name: Cleanup existing key pairs
+          fi      - name: Cleanup existing infrastructure
         run: |
-          echo "Checking for existing key pairs..."
+          echo "Cleaning up existing EC2 infrastructure..."
+          
+          # Terminate existing EC2 instances
+          INSTANCES=$(aws ec2 describe-instances \
+            --region ${{ env.AWS_REGION }} \
+            --filters "Name=tag:Project,Values=react-cicd" \
+                      "Name=instance-state-name,Values=running,stopped,stopping,pending" \
+            --query "Reservations[].Instances[].InstanceId" \
+            --output text 2>/dev/null || echo "")
+          
+          if [ -n "$INSTANCES" ] && [ "$INSTANCES" != "None" ]; then
+            echo "Found existing instances, terminating..."
+            for instance in $INSTANCES; do
+              echo "Terminating instance: $instance"
+              aws ec2 terminate-instances --instance-ids "$instance" --region ${{ env.AWS_REGION }} || true
+            done
+            
+            echo "Waiting for instances to terminate..."
+            for instance in $INSTANCES; do
+              aws ec2 wait instance-terminated --instance-ids "$instance" --region ${{ env.AWS_REGION }} || true
+            done
+          fi
+          
+          # Clean up key pairs
           EXISTING_KEYS=$(aws ec2 describe-key-pairs \
             --region ${{ env.AWS_REGION }} \
             --query "KeyPairs[?starts_with(KeyName, 'react-cicd')].KeyName" \
             --output text 2>/dev/null || echo "")
           
-          if [ -n "$EXISTING_KEYS" ]; then
+          if [ -n "$EXISTING_KEYS" ] && [ "$EXISTING_KEYS" != "None" ]; then
             echo "Found existing key pairs, cleaning up..."
             for key in $EXISTING_KEYS; do
               echo "Deleting key pair: $key"
               aws ec2 delete-key-pair --key-name "$key" --region ${{ env.AWS_REGION }} || true
             done
-          else
-            echo "No existing key pairs found"
           fi
 
       - name: Terraform Init
@@ -128,7 +147,7 @@ jobs:
     name: Deploy Application
     needs: infra_provision
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -150,7 +169,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: '1.6.0'
+          terraform_version: "1.6.0"
           terraform_wrapper: false
 
       - name: Get SSH private key
@@ -200,7 +219,7 @@ jobs:
         run: |
           scp -i ssh_key.pem -o StrictHostKeyChecking=no -r dist/* \
             ${{ needs.infra_provision.outputs.ssh_user }}@${{ needs.infra_provision.outputs.instance_ip }}:/tmp/
-          
+
           ssh -i ssh_key.pem -o StrictHostKeyChecking=no \
             ${{ needs.infra_provision.outputs.ssh_user }}@${{ needs.infra_provision.outputs.instance_ip }} \
             'sudo cp -r /tmp/* /var/www/html/ && sudo chown -R nginx:nginx /var/www/html && sudo systemctl reload nginx'
