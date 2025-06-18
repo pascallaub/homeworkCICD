@@ -16,9 +16,13 @@ resource "random_string" "suffix" {
 
 # Store private key in AWS Systems Manager Parameter Store
 resource "aws_ssm_parameter" "private_key" {
-  name  = "/ec2/ssh-key/private"
+  name  = "/ec2/ssh-key/private-${random_string.suffix.result}"
   type  = "SecureString"
   value = tls_private_key.ec2_key.private_key_pem
+  
+  tags = {
+    Environment = "deployment"
+  }
 }
 
 # Get latest Amazon Linux 2 AMI
