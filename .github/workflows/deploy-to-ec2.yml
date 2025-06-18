@@ -78,7 +78,25 @@ jobs:
               --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
               --region ${{ env.AWS_REGION }}
             aws dynamodb wait table-exists --table-name terraform-locks --region ${{ env.AWS_REGION }}
-            echo "DynamoDB table created successfully"
+            echo "DynamoDB table created successfully"          fi
+
+      - name: Cleanup existing key pairs
+        run: |
+          # Remove any existing key pairs to avoid conflicts
+          echo "Checking for existing key pairs..."
+          EXISTING_KEYS=$(aws ec2 describe-key-pairs \
+            --region ${{ env.AWS_REGION }} \
+            --query "KeyPairs[?starts_with(KeyName, 'react-cicd')].KeyName" \
+            --output text 2>/dev/null || echo "")
+
+          if [ -n "$EXISTING_KEYS" ]; then
+            echo "Found existing key pairs, cleaning up..."
+            for key in $EXISTING_KEYS; do
+              echo "Deleting key pair: $key"
+              aws ec2 delete-key-pair --key-name "$key" --region ${{ env.AWS_REGION }} || true
+            done
+          else
+            echo "No existing key pairs found"
           fi
 
       - name: Terraform Init
