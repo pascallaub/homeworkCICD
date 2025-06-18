@@ -144,6 +144,26 @@ jobs:
             sleep 30
           done
 
+      - name: Wait for user-data completion
+        run: |
+          echo "Waiting for user-data script to complete..."
+          for i in {1..20}; do
+            if ssh -i ssh_key.pem -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+               ${{ needs.infra_provision.outputs.ssh_user }}@${{ needs.infra_provision.outputs.instance_ip }} \
+               'test -f /var/log/user-data.log' 2>/dev/null; then
+              echo "User-data script completed!"
+              break
+            fi
+            echo "Attempt $i: Waiting for user-data completion, sleeping 30 seconds..."
+            sleep 30
+          done
+
+      - name: Prepare web directory
+        run: |
+          ssh -i ssh_key.pem -o StrictHostKeyChecking=no \
+            ${{ needs.infra_provision.outputs.ssh_user }}@${{ needs.infra_provision.outputs.instance_ip }} \
+            'sudo mkdir -p /var/www/html && sudo chown -R nginx:nginx /var/www/html && sudo chmod -R 755 /var/www/html'
+
       - name: Deploy application
         run: |
           scp -i ssh_key.pem -o StrictHostKeyChecking=no -r dist/* \
